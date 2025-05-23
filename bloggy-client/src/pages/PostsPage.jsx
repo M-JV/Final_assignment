@@ -1,9 +1,8 @@
 // src/pages/PostsPage.jsx
 import React, { useEffect, useState, useContext } from 'react';
-import { Container, ListGroup, Badge } from 'react-bootstrap';
+import { Container, ListGroup, Badge, Alert } from 'react-bootstrap';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../api';
-import Layout from '../components/layout/Layout';
 import { UserContext } from '../context/UserContext';
 
 export default function PostsPage() {
@@ -18,8 +17,8 @@ export default function PostsPage() {
     (async () => {
       try {
         const res = q
-          ? await api.get(`/posts?search=${encodeURIComponent(q)}`)
-          : await api.get('/posts');
+          ? await api.get(`posts?search=${encodeURIComponent(q)}`)
+          : await api.get('posts');
         setPosts(res.data);
       } catch (err) {
         console.error(err);
@@ -28,26 +27,32 @@ export default function PostsPage() {
   }, [location.search]);
 
   return (
-    <Layout>
-      <Container className="posts-container my-5">
-        <h1 className="text-center text-primary mb-4">All Posts</h1>
-        {searchTerm && (
-          <p className="text-muted">
-            Search results for "{searchTerm}"
-          </p>
-        )}
+    <Container className="posts-container my-5">
+      <h1 className="text-center text-primary mb-4">All Posts</h1>
 
-        {posts.length > 0 ? (
-          <ListGroup>
-            {posts.map(post => (
+      {searchTerm && (
+        <p className="text-muted">
+          Search results for "{searchTerm}"
+        </p>
+      )}
+
+      {posts.length > 0 ? (
+        <ListGroup>
+          {posts.map(post => {
+            const authorName = post.createdBy?.username || 'Unknown';
+            const createdAt = new Date(post.createdAt).toLocaleDateString();
+
+            return (
               <ListGroup.Item key={post._id}>
                 <h5>
-                  <Link to={`/posts/${post._id}`}>{post.title}</Link>
+                  <Link to={`/posts/${post._id}`}>
+                    {post.title}
+                  </Link>
                 </h5>
                 <small className="text-muted">
-                  Created by {post.createdBy.username} on{' '}
-                  {new Date(post.createdAt).toLocaleDateString()}
+                  Created by {authorName} on {createdAt}
                 </small>
+
                 {post.tags?.length > 0 && (
                   <div className="mt-2">
                     {post.tags.map(tag => (
@@ -63,23 +68,22 @@ export default function PostsPage() {
                   </div>
                 )}
               </ListGroup.Item>
-            ))}
-          </ListGroup>
-        ) : (
-          <p className="text-danger">
-            {searchTerm
-              ? `No posts found matching "${searchTerm}". Try another search!`
-              : 'No posts yet.'}
-          </p>
-        )}
+            );
+          })}
+        </ListGroup>
+      ) : (
+        <Alert variant={searchTerm ? 'warning' : 'info'}>
+          {searchTerm
+            ? `No posts found matching "${searchTerm}". Try another search!`
+            : 'No posts yet.'}
+        </Alert>
+      )}
 
-        {user && (
-          <Link to="/posts/new" className="btn btn-success mt-4">
-            Create New Post
-          </Link>
-        )}
-      </Container>
-    </Layout>
-  );
+      {user && (
+        <Link to="/posts/new" className="btn btn-success mt-4">
+          Create New Post
+        </Link>
+      )}
+    </Container>
+);
 }
-

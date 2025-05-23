@@ -1,52 +1,60 @@
 // src/pages/AdminUsersPage.jsx
-import React, { useEffect, useState, useContext } from 'react';
-import { Container, ListGroup, Button, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect } from 'react';
+import { Container, ListGroup, Button, Alert } from 'react-bootstrap';
 import api from '../api';
-import { UserContext } from '../context/UserContext';
 
 export default function AdminUsersPage() {
-  const [users, setUsers]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const { user } = useContext(UserContext);
+  const [users, setUsers] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get('/admin/users')
-      .then(res => setUsers(res.data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const res = await api.get('admin/users');
+        setUsers(res.data);
+      } catch (err) {
+        console.error(err);
+        setError(err.response?.data?.message || 'Error fetching users');
+      }
+    })();
   }, []);
 
-  const handleDelete = id => {
-    api.delete(`/admin/users/${id}`)
-      .then(() => setUsers(users.filter(u => u._id !== id)))
-      .catch(console.error);
+  const handleDelete = async id => {
+    if (!window.confirm('Delete this user?')) return;
+    try {
+      await api.delete(`admin/users/${id}`);
+      setUsers(users.filter(u => u._id !== id));
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || 'Error deleting user');
+    }
   };
 
-  if (loading) return <Spinner animation="border" className="m-5" />;
-
   return (
-    <Container className="admin-container my-4">
+    <Container className="my-5">
       <h1 className="text-primary text-center mb-4">All Users</h1>
-      {users.length ? (
+      {error && <Alert variant="danger">{error}</Alert>}
+
+      {users.length > 0 ? (
         <ListGroup>
           {users.map(u => (
             <ListGroup.Item key={u._id} className="d-flex justify-content-between align-items-center">
               <div>
-                <h5>{u.username}</h5>
-                <small className="text-muted">
-                  Admin Status: {u.isAdmin ? '✅ Yes' : '❌ No'}
-                </small>
+                <strong>{u.username}</strong> ({u._id})
               </div>
-              {u._id !== user?._id && (
-                <Button variant="danger" size="sm" onClick={()=>handleDelete(u._id)}>
-                  Delete
-                </Button>
-              )}
+              <Button
+                variant="danger"
+                onClick={() => handleDelete(u._id)}
+              >
+                Delete
+              </Button>
             </ListGroup.Item>
           ))}
         </ListGroup>
       ) : (
-        <p className="text-center text-danger">No users found.</p>
+        <Alert variant="info" className="text-center">
+          No users found.
+        </Alert>
       )}
     </Container>
   );

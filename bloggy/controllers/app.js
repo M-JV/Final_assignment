@@ -11,9 +11,10 @@ const passport    = require('passport');
 require('../config/passportConfig');
 
 const apiAuth       = require('./apiAuth');
-const apiPosts      = require('../routes/posts');    // your JSON API router
-const authRoutes    = require('../routes/auth');     // Pug-based auth
-const adminRoutes   = require('../routes/admin');    // Pug-based admin
+const apiPosts    = require('../routes/posts');
+const apiAdmin      = require('../routes/apiAdmin');    // ← your new JSON admin API
+const authRoutes    = require('../routes/auth');        // Pug‐based auth
+const adminRoutes   = require('../routes/apiAdmin');       // Pug‐based admin dashboard
 const Post          = require('../models/Post');
 const {
   csrfProtection,
@@ -25,12 +26,14 @@ const app           = express();
 
 // ─── MongoDB ─────────────────────────────────────────────────────────────────
 mongoose
-  .connect(process.env.MONGODB_URI || 'mongodb+srv://mejova:me1jo2va3%40@bloggy.u09ewis.mongodb.net/?retryWrites=true&w=majority&appName=Bloggy',
-
- {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-  })
+  .connect(
+    process.env.MONGODB_URI ||
+      'mongodb+srv://mejova:me1jo2va3%40@bloggy.u09ewis.mongodb.net/?retryWrites=true&w=majority&appName=Bloggy',
+    {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    }
+  )
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
@@ -39,11 +42,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Session, Flash & Passport ─────────────────────────────────────────────────
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'replace_me!',
-  resave: false,
-  saveUninitialized: false
-}));
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'replace_me!',
+    resave: false,
+    saveUninitialized: false
+  })
+);
 app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
@@ -56,35 +61,42 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── JSON API routes (no CSRF) ────────────────────────────────────────────────
-app.use('/api/auth', apiAuth);
-app.use('/api/posts', apiPosts);
-
-// ─── CSRF (double‐submit cookie) ───────────────────────────────────────────────
+// ─── CSRF PROTECTION ────────────────────────────────────────────────────────────
 app.use(csrfProtection);
 
-// 🔑 expose a JSON CSRF token for your React client
+// 🔑 expose a JSON CSRF token endpoint for your React client
 app.get('/api/csrf-token', (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
 
-// Pug‐forms still get their token injected by your middleware
-+app.use(addCsrfToken);
+// ─── JSON API routes (no CSRF needed beyond this) ───────────────────────────────
+app.use('/api/auth', apiAuth);
+app.use('/api/posts', apiPosts);
+app.use('/api/admin', apiAdmin);     
+                     // ← mount admin JSON API
+
+// ─── Inject CSRF token into your Pug forms ──────────────────────────────────────
+app.use(addCsrfToken);
 
 // ─── Serve legacy public assets & set up Pug ───────────────────────────────────
 app.use(express.static(path.join(__dirname, '../public')));
 app.set('view engine', 'pug');
 
-// ─── React build for /posts* and related routes ────────────────────────────────
+// ─── Serve React build for migrated routes ──────────────────────────────────────
 const clientBuildPath = path.join(__dirname, '../../client/build');
-[
+const reactRoutes = [
   '/posts',
   '/posts/new',
   '/posts/:id',
   '/posts/:id/edit',
   '/my-posts',
-  '/search'
-].forEach(route => {
+  '/search',
+  '/admin/posts',     // ← React‐based admin posts page
+  '/admin/users',
+  '/admin',            // admin dashboard React route
+  '/admin/posts',       // ← React‐based admin users page
+];
+reactRoutes.forEach(route => {
   app.use(route, express.static(clientBuildPath));
   app.get(route, (req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
@@ -95,6 +107,7 @@ const clientBuildPath = path.join(__dirname, '../../client/build');
 app.use(authRoutes);
 app.use(adminRoutes);
 
+// Home page (Pug)
 app.get('/', async (req, res) => {
   const posts = await Post.find()
     .populate('createdBy', 'username')
@@ -103,7 +116,7 @@ app.get('/', async (req, res) => {
 });
 
 // ─── Error Handling ────────────────────────────────────────────────────────────
-// CSRF errors (Pug)
+// CSRF errors (for Pug forms)
 app.use((err, req, res, next) => {
   if (err.code === 'EBADCSRFTOKEN') {
     req.flash('error', 'Invalid CSRF token.');
@@ -111,6 +124,7 @@ app.use((err, req, res, next) => {
   }
   next(err);
 });
+
 // JSON API errors
 app.use((err, req, res, next) => {
   console.error(err);
@@ -119,7 +133,6 @@ app.use((err, req, res, next) => {
   }
   next(err);
 });
-
 
 // ─── Start Server ──────────────────────────────────────────────────────────────
 const PORT = projectConfig.backendPort;
