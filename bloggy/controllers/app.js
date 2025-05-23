@@ -68,6 +68,7 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
 
+
 // ─── JSON API routes (no CSRF needed beyond this) ───────────────────────────────
 app.use('/api/auth', apiAuth);
 app.use('/api/posts', apiPosts);
@@ -81,27 +82,31 @@ app.use(addCsrfToken);
 
 // ─── Serve React ◀════════════════════════════════════════════════════════════
 // The client folder is called "bloggy-client" next to "bloggy":
+// ─── Serve React build in production only ──────────────────────────────────────
+const isProd    = process.env.NODE_ENV === 'production';
 const clientDir = path.join(__dirname, '../../bloggy-client');
-let spaPath;
+if (isProd) {
+  let spaPath = null;
+  if (fs.existsSync(path.join(clientDir, 'dist', 'index.html'))) {
+    spaPath = path.join(clientDir, 'dist');
+  } else if (fs.existsSync(path.join(clientDir, 'build', 'index.html'))) {
+    spaPath = path.join(clientDir, 'build');
+  } else {
+    console.warn(
+      '\x1b[33m%s\x1b[0m',
+      '⚠️  No React production build found. Run `cd bloggy-client && npm run build`.'
+    );
+  }
 
-// Prefer Vite’s dist/, fall back to CRA’s build/ if present:
-if (fs.existsSync(path.join(clientDir, 'dist', 'index.html'))) {
-  spaPath = path.join(clientDir, 'dist');
-} else if (fs.existsSync(path.join(clientDir, 'build', 'index.html'))) {
-  spaPath = path.join(clientDir, 'build');
+  if (spaPath) {
+    app.use(express.static(spaPath));
+    // any non-API GET → index.html
+    app.get(/^\/(?!api\/).*/, (req, res) =>
+      res.sendFile(path.join(spaPath, 'index.html'))
+    );
+  }
 } else {
-  console.warn(
-    '\x1b[33m%s\x1b[0m',
-    '⚠️  No client/dist or client/build folder found. Run `cd bloggy-client && npm run build`.'
-  );
-}
-
-if (spaPath) {
-  app.use(express.static(spaPath));
-  // Any GET that’s not /api/... should serve index.html
-  app.get(/^\/(?!api\/).*/, (req, res) => {
-    res.sendFile(path.join(spaPath, 'index.html'));
-  });
+  console.log('🔧 Skipping React static‐serve (development mode)');
 }
 
 // ─── API error handler & server start ───────────────────────────────────────

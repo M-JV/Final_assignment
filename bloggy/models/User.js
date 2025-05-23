@@ -4,36 +4,17 @@ const mongoose = require('mongoose');
 const bcrypt   = require('bcrypt');
 
 const userSchema = new mongoose.Schema({
-  username: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true
-  },
-  password: {
-    type: String,
-    // only required if there is no googleId
-    required: function() { return !this.googleId; }
-  },
-  googleId: {
-    type: String,
-    unique: true,
-    sparse: true  // allow multiple docs with no googleId
-  },
-  isAdmin: {
-    type: Boolean,
-    default: false
-  }
+  username:  { type: String, required: true, unique: true, trim: true },
+  email:     { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password:  { type: String, required: function() { return !this.googleId; } },
+  googleId:  { type: String, unique: true, sparse: true },
+  isAdmin:   { type: Boolean, default: false },
+  // ← who this user is subscribed to:
+  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, {
   timestamps: true
 });
+
 
 // ─── Hash password before saving ────────────────────────────────────────────────
 userSchema.pre('save', async function(next) {

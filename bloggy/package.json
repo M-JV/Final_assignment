@@ -1,11 +1,14 @@
+
+
 {
   "name": "bloggy",
   "version": "1.0.0",
   "main": "controllers/app.js",
   "scripts": {
-    "build-client": "cd ../bloggy-client && npm install && npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "devStart": "npm run build-client && nodemon controllers/app.js"
+     
+    "dev": "nodemon controllers/app.js",
+    "build-client": "cd ../bloggy-client && npm ci && npm run build",
+    "start":        "npm run build-client && NODE_ENV=production node controllers/app.js"
   },
   "keywords": [],
   "author": "mejova",
