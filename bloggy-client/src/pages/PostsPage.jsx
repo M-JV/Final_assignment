@@ -1,6 +1,15 @@
 // src/pages/PostsPage.jsx
 import React, { useEffect, useState, useContext } from 'react';
-import { Container, ListGroup, Badge, Alert } from 'react-bootstrap';
+import {
+  Container,
+  Row,
+  Col,
+  ListGroup,
+  Badge,
+  Alert,
+  Spinner,
+  Card
+} from 'react-bootstrap';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../api';
 import { UserContext } from '../context/UserContext';
@@ -8,82 +17,139 @@ import { UserContext } from '../context/UserContext';
 export default function PostsPage() {
   const { user } = useContext(UserContext);
   const location = useLocation();
-  const [posts, setPosts] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
 
+  const [posts, setPosts] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Pull “q” from the URL (navbar search puts it there)
+  const searchTerm = new URLSearchParams(location.search).get('q') || '';
+
+  // Fetch posts (filtered by “q” if present)
   useEffect(() => {
-    const q = new URLSearchParams(location.search).get('q') || '';
-    setSearchTerm(q);
+    setLoadingPosts(true);
     (async () => {
       try {
-        const res = q
-          ? await api.get(`posts?search=${encodeURIComponent(q)}`)
-          : await api.get('posts');
+        const url = searchTerm
+          ? `/posts?search=${encodeURIComponent(searchTerm)}`
+          : '/posts';
+        const res = await api.get(url);
         setPosts(res.data);
       } catch (err) {
         console.error(err);
+      } finally {
+        setLoadingPosts(false);
       }
     })();
-  }, [location.search]);
+  }, [searchTerm]);
+
+  // Fetch authors list
+  useEffect(() => {
+    setLoadingUsers(true);
+    (async () => {
+      try {
+        const res = await api.get('/users');
+        setUsers(res.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingUsers(false);
+      }
+    })();
+  }, []);
 
   return (
-    <Container className="posts-container my-5">
-      <h1 className="text-center text-primary mb-4">All Posts</h1>
+    <Container fluid className="my-5">
+      <Row>
+        {/* Left‐side authors panel */}
+        <Col md={3}>
+          <h5>Authors</h5>
+          {loadingUsers ? (
+            <Spinner animation="border" />
+          ) : (
+            <ListGroup>
+              {users.map(u => (
+                <ListGroup.Item
+                  key={u._id}
+                  action
+                  as={Link}
+                  to={`/author/${u._id}`}
+                >
+                  {u.username}
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          )}
+        </Col>
 
-      {searchTerm && (
-        <p className="text-muted">
-          Search results for "{searchTerm}"
-        </p>
-      )}
+        {/* Main posts list */}
+        <Col md={9}>
+          {searchTerm && (
+            <p className="text-muted">
+              Search results for “{searchTerm}”
+            </p>
+          )}
 
-      {posts.length > 0 ? (
-        <ListGroup>
-          {posts.map(post => {
-            const authorName = post.createdBy?.username || 'Unknown';
-            const createdAt = new Date(post.createdAt).toLocaleDateString();
-
-            return (
-              <ListGroup.Item key={post._id}>
-                <h5>
-                  <Link to={`/posts/${post._id}`}>
-                    {post.title}
-                  </Link>
-                </h5>
-                <small className="text-muted">
-                  Created by {authorName} on {createdAt}
-                </small>
-
-                {post.tags?.length > 0 && (
-                  <div className="mt-2">
-                    {post.tags.map(tag => (
-                      <Link
-                        key={tag}
-                        to={`/search?q=${encodeURIComponent(tag)}`}
-                      >
-                        <Badge bg="secondary" className="mx-1">
-                          {tag}
-                        </Badge>
+          {loadingPosts ? (
+            <Spinner animation="border" />
+          ) : posts.length > 0 ? (
+            posts.map(post => {
+              const createdAt = new Date(post.createdAt)
+                .toLocaleDateString();
+              const preview = post.content.length > 150
+                ? post.content.slice(0, 150) + '…'
+                : post.content;
+              return (
+                <Card className="mb-4" key={post._id}>
+                  <Card.Body>
+                    <Card.Title>
+                      <Link to={`/posts/${post._id}`}>
+                        {post.title}
                       </Link>
-                    ))}
-                  </div>
-                )}
-              </ListGroup.Item>
-            );
-          })}
-        </ListGroup>
-      ) : (
-        <Alert variant={searchTerm ? 'warning' : 'info'}>
-          {searchTerm
-            ? `No posts found matching "${searchTerm}". Try another search!`
-            : 'No posts yet.'}
-        </Alert>
-      )}
+                    </Card.Title>
+                    <Card.Subtitle className="mb-2 text-muted">
+                      By{' '}
+                      <Link to={`/author/${post.createdBy._id}`}>
+                        {post.createdBy.username}
+                      </Link>{' '}
+                      on {createdAt}
+                    </Card.Subtitle>
+                    <Card.Text>{preview}</Card.Text>
+                    {post.tags?.length > 0 && (
+                      <>
+                        {post.tags.map(tag => (
+                          <Badge
+                            bg="secondary"
+                            className="me-1"
+                            key={tag}
+                            as={Link}
+                            to={`/posts?q=${encodeURIComponent(tag)}`}
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </>
+                    )}
+                  </Card.Body>
+                </Card>
+              );
+            })
+          ) : (
+            <Alert variant={searchTerm ? 'warning' : 'info'}>
+              {searchTerm
+                ? `No posts found matching “${searchTerm}.”`
+                : 'No posts yet.'}
+            </Alert>
+          )}
 
-      {user && (
-        <Link to="/posts/new" className="btn btn-success mt-4">
-          Create New Post
-        </Link>
-      )}
+          {user && (
+            <Link to="/posts/new" className="btn btn-success">
+              Create New Post
+            </Link>
+          )}
+        </Col>
+      </Row>
     </Container>
-);
+  );
 }

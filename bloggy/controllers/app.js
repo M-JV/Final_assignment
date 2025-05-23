@@ -13,7 +13,8 @@ require('../config/passportConfig');
 
 const apiAuth       = require('./apiAuth');
 const apiPosts    = require('../routes/posts');
-const apiAdmin      = require('../routes/apiAdmin');    // ← your new JSON admin API
+const apiAdmin      = require('../routes/apiAdmin'); 
+const apiUsers  = require('../routes/apiUsers');   // ← your new JSON admin API
 // const Post          = require('../models/Post');
 const {
   csrfProtection,
@@ -71,6 +72,8 @@ app.get('/api/csrf-token', (req, res) => {
 app.use('/api/auth', apiAuth);
 app.use('/api/posts', apiPosts);
 app.use('/api/admin', apiAdmin);   
+app.use('/api/users', apiUsers);
+
                      // ← mount admin JSON API
 
 // ─── Inject CSRF token cookie into any (theoretical) HTML forms ────────────────
