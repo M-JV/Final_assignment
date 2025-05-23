@@ -1,139 +1,144 @@
-// controller/posts.js
+// routes/posts.js
+const express               = require('express');
+const mongoose              = require('mongoose');
+const Post                  = require('../models/Post');
+const { postValidation }    = require('../controllers/validation');
+const { isAuthenticated }   = require('../middleware/auth');
+const checkPostOwnership    = require('../middleware/checkPostOwnership'); // <— correct import
+const router                = express.Router();
 
+// ─── List & Search ───────────────────────────────────────────────────────────
+router.get('/', async (req, res) => {
+  const q = req.query.search;
+  const filter = q
+    ? {
+        $or: [
+          { title: { $regex: q, $options: 'i' } },
+          { tags:  { $regex: q, $options: 'i' } }
+        ]
+      }
+    : {};
 
-const express = require('express');
-const mongoose = require('mongoose');
-const Post = require('../models/Post');
-const { postValidation } = require('../controllers/validation');
-const { isAuthenticated } = require('../middleware/auth');
-const checkPostOwnership = require('../middleware/checkPostOwnership');
-const router = express.Router();
-
-
-// Create Post Form
-router.get('/posts/new', isAuthenticated, (req, res) => {
-    res.render('new-post', { error: req.flash('error') });
+  try {
+    const posts = await Post.find(filter)
+      .populate('createdBy', 'username')
+      .sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (err) {
+    console.error('Error fetching posts:', err);
+    res.status(500).json({ message: 'Error fetching posts' });
+  }
 });
 
+// ─── My Posts ─────────────────────────────────────────────────────────────────
+router.get('/user/:userId', isAuthenticated, async (req, res) => {
+  if (req.params.userId !== req.user.id) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  try {
+    const posts = await Post.find({ createdBy: req.user.id })
+      .populate('createdBy', 'username')
+      .sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (err) {
+    console.error('Error fetching your posts:', err);
+    res.status(500).json({ message: 'Error fetching your posts' });
+  }
+});
 
-// Create Post
-router.post('/posts', isAuthenticated, async (req, res) => {
+// ─── Fetch for Edit ────────────────────────────────────────────────────────────
+router.get('/:id/edit',
+  isAuthenticated,
+  checkPostOwnership,              // <— use checkPostOwnership here
+  (req, res) => {
+    res.json(req.post);
+  }
+);
+
+// ─── Get Single Post ───────────────────────────────────────────────────────────
+router.get('/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: 'Invalid post ID' });
+  }
+  try {
+    const post = await Post.findById(id)
+      .populate('createdBy', 'username');
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+    res.json(post);
+  } catch (err) {
+    console.error('Error fetching post:', err);
+    res.status(500).json({ message: 'Error fetching post' });
+  }
+});
+
+// ─── Create Post ───────────────────────────────────────────────────────────────
+router.post('/',
+  isAuthenticated,
+  async (req, res) => {
     const { title, content, tags } = req.body;
-
-    // Validate only title and content
     const { error } = postValidation.validate({ title, content });
     if (error) {
-        req.flash('error', error.details[0].message);
-        return res.redirect('/posts/new');
+      return res.status(400).json({ message: error.details[0].message });
     }
-
-    // Process tags
-    const processedTags = tags ? tags.split(',').map(tag => tag.trim().toLowerCase()) : [];
-
-    // create and save posts
+    const processedTags = Array.isArray(tags)
+      ? tags.map(t => t.trim().toLowerCase()).filter(Boolean)
+      : [];
     try {
-        const post = new Post({ title, content, createdBy: req.user._id, tags: processedTags });
-        await post.save();
-        req.flash('success', 'Post created');
-        res.redirect('/posts');
+      const post = new Post({
+        title,
+        content,
+        tags: processedTags,
+        createdBy: req.user.id
+      });
+      await post.save();
+      res.status(201).json(post);
     } catch (err) {
-        console.error('Error creating post:', err);
-        req.flash('error', 'Error creating post');
-        res.redirect('/posts/new');
+      console.error('Error creating post:', err);
+      res.status(500).json({ message: 'Error creating post' });
     }
-});
-
-
-// Search Posts
-router.get('/search', async (req, res) => {
-  const query = req.query.q;
-
-  try {
-    let searchQuery = {};
-    if (query) {
-      searchQuery = {
-        $or: [
-          { title: { $regex: query, $options: 'i' } },
-          { tags: { $regex: query, $options: 'i' } }
-        ]
-      };
-    }
-
-    const posts = await Post.find(searchQuery).populate('createdBy', 'username');
-    res.render('posts', { posts, searchTerm: query }); // Use 'posts.pug' to display filtered posts
-  } catch (err) {
-    console.error('❌ Error searching posts:', err);
-    req.flash('error', 'Error while searching.');
-    res.redirect('/');
   }
-});
+);
 
+// ─── Update Post ───────────────────────────────────────────────────────────────
+router.put('/:id',
+  isAuthenticated,
+  checkPostOwnership,              // <— and here
+  async (req, res) => {
+    const { title, content, tags } = req.body;
+    const { error } = postValidation.validate({ title, content });
+    if (error) {
+      return res.status(400).json({ message: error.details[0].message });
+    }
+    req.post.title   = title;
+    req.post.content = content;
+    req.post.tags    = Array.isArray(tags)
+      ? tags.map(t => t.trim().toLowerCase()).filter(Boolean)
+      : [];
 
-// View All Posts (without search filtering)
-router.get('/posts', async (req, res) => {
-  try {
-    const posts = await Post.find().populate('createdBy', 'username');
-    res.render('posts', { posts });
-  } catch (err) {
-    console.error('❌ Error fetching posts:', err);
-    req.flash('error', 'Error fetching posts.');
-    res.redirect('/');
+    try {
+      await req.post.save();
+      res.json(req.post);
+    } catch (err) {
+      console.error('Error updating post:', err);
+      res.status(500).json({ message: 'Error updating post' });
+    }
   }
-});
+);
 
-
-// View Single Post
-router.get('/posts/:id', async (req, res) => {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-        req.flash('error', 'Invalid post ID');
-        return res.redirect('/posts');
-    }
-
+// ─── Delete Post ───────────────────────────────────────────────────────────────
+router.delete('/:id',
+  isAuthenticated,
+  checkPostOwnership,              // <— and here
+  async (req, res) => {
     try {
-        const post = await Post.findById(req.params.id).populate('createdBy', 'username');
-        if (!post) {
-            req.flash('error', 'Post not found');
-            return res.redirect('/posts');
-        }
-        res.render('post', { post });
+      await req.post.deleteOne();
+      res.json({ message: 'Post deleted' });
     } catch (err) {
-        console.error('Error fetching post:', err);
-        req.flash('error', 'Error fetching post');
-        res.redirect('/posts');
+      console.error('Error deleting post:', err);
+      res.status(500).json({ message: 'Error deleting post' });
     }
-});
-
-
-// Edit & Update Post
-
-router.get('/posts/:id/edit', isAuthenticated, checkPostOwnership, async (req, res) => {
-  res.render('edit-post', { post: req.post });
-});
-router.post('/posts/:id', isAuthenticated, checkPostOwnership, async (req, res) => {
-    try {
-        Object.assign(req.post, req.body);
-        await req.post.save();
-        req.flash('success', 'Post updated');
-        res.redirect(`/posts/${req.post._id}`);
-    } catch (err) {
-        console.error('Error updating post:', err);
-        req.flash('error', 'Error updating post');
-        res.redirect(`/posts/${req.params.id}/edit`);
-    }
-});
-
-
-// Delete Post
-router.post('/posts/:id/delete', isAuthenticated, checkPostOwnership, async (req, res) => {
-    try {
-        await req.post.deleteOne();
-        req.flash('success', 'Post deleted');
-        res.redirect('/posts');
-    } catch (err) {
-        console.error('Error deleting post:', err);
-        req.flash('error', 'Error deleting post');
-        res.redirect('/posts');
-    }
-});
+  }
+);
 
 module.exports = router;

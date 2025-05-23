@@ -1,29 +1,27 @@
 // controllers/app.js
 require('dotenv').config();
-const path       = require('path');
-const express    = require('express');
-const mongoose   = require('mongoose');
-const session    = require('express-session');
-const flash      = require('connect-flash');
-const passport   = require('passport');
+const path        = require('path');
+const express     = require('express');
+const mongoose    = require('mongoose');
+const session     = require('express-session');
+const flash       = require('connect-flash');
+const passport    = require('passport');
 
 // <-- Load & configure Passport strategies
 require('../config/passportConfig');
 
-const apiAuth     = require('./apiAuth');
-const apiPosts    = require('./apiPosts');
-const authRoutes  = require('../routes/auth');
-const postRoutes  = require('../routes/posts');
-const adminRoutes = require('../routes/admin');
-const Post        = require('../models/Post');
+const apiAuth       = require('./apiAuth');
+const apiPosts      = require('../routes/posts');    // your JSON API router
+const authRoutes    = require('../routes/auth');     // Pug-based auth
+const adminRoutes   = require('../routes/admin');    // Pug-based admin
+const Post          = require('../models/Post');
 const {
   csrfProtection,
   addCsrfToken
 } = require('../middleware/csrf');
 
 const projectConfig = require(path.join(__dirname, '../../project.config.js'));
-
-const app = express();
+const app           = express();
 
 // ─── MongoDB ─────────────────────────────────────────────────────────────────
 mongoose
@@ -47,11 +45,10 @@ app.use(session({
   saveUninitialized: false
 }));
 app.use(flash());
+app.use(passport.initialize());
+app.use(passport.session());
 
-app.use('/api/auth', require('./apiAuth'));
-app.use('/api',      require('./apiPosts'));   // ← this line
-
-// ─── Make flash & user available to Pug views ─────────────────────────────────
+// ─── Expose flash messages & user to Pug views ─────────────────────────────────
 app.use((req, res, next) => {
   res.locals.success = req.flash('success');
   res.locals.error   = req.flash('error');
@@ -61,19 +58,41 @@ app.use((req, res, next) => {
 
 // ─── JSON API routes (no CSRF) ────────────────────────────────────────────────
 app.use('/api/auth', apiAuth);
-app.use('/api',      apiPosts);
+app.use('/api/posts', apiPosts);
 
-// ─── Static & Views ───────────────────────────────────────────────────────────
+// ─── CSRF (double‐submit cookie) ───────────────────────────────────────────────
+app.use(csrfProtection);
+
+// 🔑 expose a JSON CSRF token for your React client
+app.get('/api/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
+});
+
+// Pug‐forms still get their token injected by your middleware
++app.use(addCsrfToken);
+
+// ─── Serve legacy public assets & set up Pug ───────────────────────────────────
 app.use(express.static(path.join(__dirname, '../public')));
 app.set('view engine', 'pug');
 
-// ─── CSRF for normal HTML forms ────────────────────────────────────────────────
-app.use(csrfProtection);
-app.use(addCsrfToken);
+// ─── React build for /posts* and related routes ────────────────────────────────
+const clientBuildPath = path.join(__dirname, '../../client/build');
+[
+  '/posts',
+  '/posts/new',
+  '/posts/:id',
+  '/posts/:id/edit',
+  '/my-posts',
+  '/search'
+].forEach(route => {
+  app.use(route, express.static(clientBuildPath));
+  app.get(route, (req, res) => {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+});
 
-// ─── Pug‐based routes ─────────────────────────────────────────────────────────
+// ─── Pug‐based routes for auth, home & admin ──────────────────────────────────
 app.use(authRoutes);
-app.use(postRoutes);
 app.use(adminRoutes);
 
 app.get('/', async (req, res) => {
@@ -84,7 +103,7 @@ app.get('/', async (req, res) => {
 });
 
 // ─── Error Handling ────────────────────────────────────────────────────────────
-// CSRF errors
+// CSRF errors (Pug)
 app.use((err, req, res, next) => {
   if (err.code === 'EBADCSRFTOKEN') {
     req.flash('error', 'Invalid CSRF token.');
@@ -100,6 +119,7 @@ app.use((err, req, res, next) => {
   }
   next(err);
 });
+
 
 // ─── Start Server ──────────────────────────────────────────────────────────────
 const PORT = projectConfig.backendPort;
