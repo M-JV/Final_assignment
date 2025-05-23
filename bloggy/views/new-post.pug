@@ -1,0 +1,29 @@
+//- views/new-post.pug
+
+extends layout
+
+block content
+  style.
+    .form-container {
+      background-color: #ffffffcc;
+      border-radius: 1rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      font-family: 'Roboto', sans-serif;
+    }
+
+  .container.form-container
+    h1.text-primary.text-center Create New Post
+    form(method="POST" action="/posts")
+      input(type="hidden" name="_csrf" value=csrfToken)
+
+      .mb-3
+        label(for="title") Title
+        input.form-control(type="text" id="title" name="title" required)
+      .mb-3
+        label(for="content") Content
+        textarea.form-control(id="content" name="content" rows="5" required)
+      .mb-3
+        label(for="tags") Tags (comma-separated)
+        input.form-control(type="text" id="tags" name="tags")
+      button.btn.btn-success.w-100.mt-3(type="submit") Create Post

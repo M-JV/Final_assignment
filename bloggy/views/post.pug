@@ -1,0 +1,42 @@
+//- views/post.pug
+
+extends layout
+
+block content
+  style.
+    .post-container {
+      background-color: #ffffffcc;
+      border-radius: 1rem;
+      padding: 2rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      font-family: 'Roboto', sans-serif;
+    }
+    .button-group {
+      margin-top: 1.5rem;
+      display: flex;
+      gap: 1rem;
+    }
+    .button-group form {
+      margin: 0;
+    }
+
+  .container.post-container
+    h1.text-primary= post.title
+    p= post.content
+    small.text-muted Created by #{post.createdBy.username} on #{post.createdAt.toDateString()}
+
+    //- Render tags as clickable badges
+    if post.tags && post.tags.length
+      h6.mt-4 Tags:
+      ul.list-inline
+        each tag in post.tags
+          li.list-inline-item
+            a(href=`/search?q=${encodeURIComponent(tag)}`)
+              span.badge.bg-info.text-dark= tag
+
+    if user && user._id.equals(post.createdBy._id)
+      .button-group
+        a.btn.btn-primary(href=`/posts/${post._id}/edit`) Edit
+        form(action=`/posts/${post._id}/delete` method="POST")
+          input(type="hidden" name="_csrf" value=csrfToken)
+          button.btn.btn-danger(type="submit") Delete

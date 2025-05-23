@@ -1,0 +1,28 @@
+//- views/edit-post.pug
+
+extends layout
+
+block content
+  style.
+    .form-container {
+      background-color: #ffffffcc;
+      border-radius: 1rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      font-family: 'Roboto', sans-serif;
+    }
+
+  .container.form-container
+    h1.text-primary.text-center Edit Post
+    form(method='POST', action=`/posts/${post._id}`)
+      input(type="hidden" name="_csrf" value=csrfToken)
+      .form-group
+        label(for="title") Title
+        input#title.form-control(type="text" name="title" value=post.title required)
+      .form-group
+        label(for="content") Content
+        textarea#content.form-control(name="content" required)= post.content
+      .form-group
+        label(for="tags") Tags (comma-separated)
+        input#tags.form-control(type="text" name="tags" value=post.tags.join(', '))
+      button.btn.btn-primary.mt-3(type="submit") Update

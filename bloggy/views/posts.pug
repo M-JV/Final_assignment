@@ -1,0 +1,38 @@
+//- views/posts.pug
+
+extends layout
+
+block content
+  style.
+    .posts-container {
+      background-color: #ffffffcc;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+  .container.posts-container
+    h1.text-center.text-primary All Posts
+
+    if searchTerm
+      p.text-muted Search results for "#{searchTerm}"
+
+    if posts.length
+      ul.list-group
+        each post in posts
+          li.list-group-item
+            h5
+              a(href=`/posts/${post._id}`) #{post.title}
+            small.text-muted Created by #{post.createdBy.username} on #{post.createdAt.toDateString()}
+
+            //- Render tags as clickable badges
+            if post.tags && post.tags.length
+              .mt-2
+                each tag in post.tags
+                  a(href=`/search?q=${encodeURIComponent(tag)}`)
+                    span.badge.bg-secondary.mx-1= tag
+    else
+      p.text-danger No posts found matching "#{searchTerm}". Try another search!
+
+    if user
+      a.btn.btn-success.mt-4(href="/posts/new") Create New Post

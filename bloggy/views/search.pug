@@ -1,0 +1,28 @@
+//-  views/search.pug
+
+extends layout
+
+block content
+  style.
+    .search-results-container {
+      background-color: #ffffffcc;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+  .container.search-results-container
+    h1.text-primary.text-center Search Results
+
+    if searchTerm
+      p.text-muted Results for "#{searchTerm}"
+
+    if posts.length
+      ul.list-group
+        each post in posts
+          li.list-group-item
+            h5 
+              a(href=`/posts/${post._id}`) #{post.title}
+            p.text-muted By #{post.createdBy.username}
+    else
+      p.text-danger No posts found.
