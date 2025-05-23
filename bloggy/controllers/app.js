@@ -1,6 +1,7 @@
 // controllers/app.js
 require('dotenv').config();
 const path        = require('path');
+const fs          = require('fs');
 const express     = require('express');
 const mongoose    = require('mongoose');
 const session     = require('express-session');
@@ -13,9 +14,7 @@ require('../config/passportConfig');
 const apiAuth       = require('./apiAuth');
 const apiPosts    = require('../routes/posts');
 const apiAdmin      = require('../routes/apiAdmin');    // ← your new JSON admin API
-const authRoutes    = require('../routes/auth');        // Pug‐based auth
-const adminRoutes   = require('../routes/apiAdmin');       // Pug‐based admin dashboard
-const Post          = require('../models/Post');
+// const Post          = require('../models/Post');
 const {
   csrfProtection,
   addCsrfToken
@@ -53,11 +52,10 @@ app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ─── Expose flash messages & user to Pug views ─────────────────────────────────
+// ─── Make flash & user available on req (for JSON APIs) ────────────────────────
 app.use((req, res, next) => {
-  res.locals.success = req.flash('success');
-  res.locals.error   = req.flash('error');
-  res.locals.user    = req.user;
+  req.flash = req.flash.bind(req);
+  req.user  = req.user;
   next();
 });
 
@@ -72,64 +70,42 @@ app.get('/api/csrf-token', (req, res) => {
 // ─── JSON API routes (no CSRF needed beyond this) ───────────────────────────────
 app.use('/api/auth', apiAuth);
 app.use('/api/posts', apiPosts);
-app.use('/api/admin', apiAdmin);     
+app.use('/api/admin', apiAdmin);   
                      // ← mount admin JSON API
 
-// ─── Inject CSRF token into your Pug forms ──────────────────────────────────────
+// ─── Inject CSRF token cookie into any (theoretical) HTML forms ────────────────
 app.use(addCsrfToken);
 
-// ─── Serve legacy public assets & set up Pug ───────────────────────────────────
-app.use(express.static(path.join(__dirname, '../public')));
-app.set('view engine', 'pug');
+// ─── Serve React ◀════════════════════════════════════════════════════════════
+// The client folder is called "bloggy-client" next to "bloggy":
+const clientDir = path.join(__dirname, '../../bloggy-client');
+let spaPath;
 
-// ─── Serve React build for migrated routes ──────────────────────────────────────
-const clientBuildPath = path.join(__dirname, '../../client/build');
-const reactRoutes = [
-  '/posts',
-  '/posts/new',
-  '/posts/:id',
-  '/posts/:id/edit',
-  '/my-posts',
-  '/search',
-  '/admin/posts',     // ← React‐based admin posts page
-  '/admin/users',
-  '/admin',            // admin dashboard React route
-  '/admin/posts',       // ← React‐based admin users page
-];
-reactRoutes.forEach(route => {
-  app.use(route, express.static(clientBuildPath));
-  app.get(route, (req, res) => {
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
+// Prefer Vite’s dist/, fall back to CRA’s build/ if present:
+if (fs.existsSync(path.join(clientDir, 'dist', 'index.html'))) {
+  spaPath = path.join(clientDir, 'dist');
+} else if (fs.existsSync(path.join(clientDir, 'build', 'index.html'))) {
+  spaPath = path.join(clientDir, 'build');
+} else {
+  console.warn(
+    '\x1b[33m%s\x1b[0m',
+    '⚠️  No client/dist or client/build folder found. Run `cd bloggy-client && npm run build`.'
+  );
+}
+
+if (spaPath) {
+  app.use(express.static(spaPath));
+  // Any GET that’s not /api/... should serve index.html
+  app.get(/^\/(?!api\/).*/, (req, res) => {
+    res.sendFile(path.join(spaPath, 'index.html'));
   });
-});
+}
 
-// ─── Pug‐based routes for auth, home & admin ──────────────────────────────────
-app.use(authRoutes);
-app.use(adminRoutes);
-
-// Home page (Pug)
-app.get('/', async (req, res) => {
-  const posts = await Post.find()
-    .populate('createdBy', 'username')
-    .limit(3);
-  res.render('home', { posts });
-});
-
-// ─── Error Handling ────────────────────────────────────────────────────────────
-// CSRF errors (for Pug forms)
-app.use((err, req, res, next) => {
-  if (err.code === 'EBADCSRFTOKEN') {
-    req.flash('error', 'Invalid CSRF token.');
-    return res.redirect('back');
-  }
-  next(err);
-});
-
-// JSON API errors
+// ─── API error handler & server start ───────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err);
   if (req.path.startsWith('/api/')) {
-    return res.status(500).json({ message: err.message });
+    return res.status(err.status || 500).json({ message: err.message });
   }
   next(err);
 });

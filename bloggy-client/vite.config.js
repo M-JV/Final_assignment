@@ -16,4 +16,8 @@ export default defineConfig({
       },
     },
   },
+  define: {
+    // expose your backend baseUrl to the client
+    'import.meta.env.VITE_API_BASE': JSON.stringify(projectConfig.baseUrl)
+  }
 });

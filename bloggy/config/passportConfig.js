@@ -1,6 +1,8 @@
 // config/passportConfig.js
+const projectConfig = require('../../project.config.js');
 const passport      = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
+const GoogleStrategy  = require('passport-google-oauth20').Strategy;
 const User          = require('../models/User');
 
 // Configure the “local” strategy to use your comparePassword() method
@@ -28,6 +30,30 @@ passport.use(new LocalStrategy(
     }
   }
 ));
+
+// ─── Google OAuth 2.0 Strategy ────────────────────────────────────────────────
+passport.use(new GoogleStrategy({
+    clientID:     projectConfig.googleClientID,
+    clientSecret: projectConfig.googleClientSecret,
+    callbackURL:  `${projectConfig.baseUrl}/api/auth/google/callback`,
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      let user = await User.findOne({ googleId: profile.id });
+      if (!user) {
+        user = await User.create({
+          username: profile.displayName,
+          email:    profile.emails[0].value,
+          googleId: profile.id
+        });
+      }
+      done(null, user);
+    } catch (err) {
+      done(err);
+    }
+  }
+));
+
 
 // Serialize / deserialize
 passport.serializeUser((user, done) => {

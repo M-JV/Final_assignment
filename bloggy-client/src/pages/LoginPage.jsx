@@ -1,28 +1,26 @@
 // src/pages/LoginPage.jsx
 import React, { useState, useContext, useEffect } from 'react';
-import { Form, Button, Container, Alert }      from 'react-bootstrap';
-import { useNavigate, useLocation }            from 'react-router-dom';
-import api                                     from '../api';
-import { UserContext }                         from '../context/UserContext';
+import { Form, Button, Container, Alert, Spinner } from 'react-bootstrap';
+import { useNavigate, useLocation } from 'react-router-dom';
+import api from '../api';
+import { UserContext } from '../context/UserContext';
 
 export default function LoginPage() {
   const { setUser } = useContext(UserContext);
-  const navigate    = useNavigate();
-  const location    = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
-  const [success, setSuccess]   = useState('');
+  const [loading, setLoading]   = useState(false);
 
-  // If a success message was passed via navigate state, show it once
+  // Handle redirect-on-success from other pages
   useEffect(() => {
     if (location.state?.success) {
-      setSuccess(location.state.success);
-      // clear it so it doesn't reappear on back/refresh
+      setError(location.state.success);
       navigate(location.pathname, { replace: true, state: {} });
-      // auto-dismiss after 5s
-      const tid = setTimeout(() => setSuccess(''), 5000);
+      const tid = setTimeout(() => setError(''), 5000);
       return () => clearTimeout(tid);
     }
   }, [location, navigate]);
@@ -30,27 +28,43 @@ export default function LoginPage() {
   const handleSubmit = async e => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
-      // call JSON API under /api proxy
-      const res = await api.post('/auth/login', { username, password });
-      // unwrap the user object
+      const res = await api.post('auth/login', { username, password });
       setUser(res.data.user);
-      navigate('/');
+      navigate('/', { replace: true });
     } catch (err) {
-      setError(
-        err.response?.data?.message
-          ? err.response.data.message
-          : 'Login failed – please try again'
-      );
+      setError(err.response?.data?.message || 'Error logging in');
+    } finally {
+      setLoading(false);
     }
   };
 
-  return (
-    <Container className="form-container my-5" style={{ maxWidth: '400px' }}>
-      <h1 className="text-primary text-center mb-4">Login</h1>
+// use the VITE_API_BASE we defined in vite.config.js
+const googleAuthUrl = `${import.meta.env.VITE_API_BASE}/api/auth/google`;
 
-      {success && <Alert variant="success">{success}</Alert>}
-      {error   && <Alert variant="danger">{error}</Alert>}
+  return (
+    <Container className="form-container my-5" style={{ maxWidth: 400 }}>
+      <h1 className="text-center mb-4">Login</h1>
+
+      {/* Google OAuth */}
+      <Button
+        variant="outline-primary"
+        href={googleAuthUrl}
+        className="w-100 mb-3 d-flex align-items-center justify-content-center"
+      >
+        <img
+          src="https://www.svgrepo.com/show/355037/google.svg"
+          alt="Google"
+          style={{ width: 20, marginRight: 8 }}
+        />
+        Sign in with Google
+      </Button>
+
+      <hr />
+
+      {/* Local login form */}
+      {error && <Alert variant="danger">{error}</Alert>}
 
       <Form onSubmit={handleSubmit}>
         <Form.Group controlId="username" className="mb-3">
@@ -59,8 +73,8 @@ export default function LoginPage() {
             type="text"
             value={username}
             onChange={e => setUsername(e.target.value)}
-            placeholder="Enter your username"
             required
+            placeholder="Enter your username"
           />
         </Form.Group>
 
@@ -70,13 +84,18 @@ export default function LoginPage() {
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder="Enter your password"
             required
+            placeholder="Enter your password"
           />
         </Form.Group>
 
-        <Button type="submit" variant="primary" className="w-100">
-          Login
+        <Button
+          variant="primary"
+          type="submit"
+          className="w-100"
+          disabled={loading}
+        >
+          {loading ? <Spinner animation="border" size="sm" /> : 'Log In'}
         </Button>
       </Form>
     </Container>

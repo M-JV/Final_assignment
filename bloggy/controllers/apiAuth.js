@@ -1,7 +1,7 @@
 // controllers/apiAuth.js
-const express           = require('express');
-const passport          = require('passport');
-const User              = require('../models/User');
+const express          = require('express');
+const passport         = require('passport');
+const User             = require('../models/User');
 const {
   registerValidation,
   loginValidation
@@ -11,40 +11,65 @@ const router = express.Router();
 
 // — Who am I? — GET /api/auth/me
 router.get('/me', (req, res) => {
-  try {
-    if (req.user) {
-      return res.json({
-        user: {
-          id:       req.user._id,
-          username: req.user.username,
-          isAdmin:  req.user.isAdmin
-        }
-      });
-    }
-    res.json({ user: null });
-  } catch (err) {
-    console.error('Error in /api/auth/me:', err);
-    res.status(500).json({ message: 'Server error' });
+  if (req.user) {
+    return res.json({
+      user: {
+        id:       req.user._id,
+        username: req.user.username,
+        email:    req.user.email,
+        isAdmin:  req.user.isAdmin
+      }
+    });
   }
+  res.json({ user: null });
 });
 
 // — Register — POST /api/auth/register
 router.post('/register', async (req, res) => {
+  // 1) Validate input
   const { error } = registerValidation.validate(req.body);
   if (error) {
     return res.status(400).json({ message: error.details[0].message });
   }
 
+  const { username, email, password } = req.body;
+
   try {
-    const { username, password } = req.body;
-    const user = new User({ username, password });  // pre-save hook hashes it
+    // 2) Ensure unique username & email
+    const conflict = await User.findOne({
+      $or: [{ username }, { email }]
+    });
+    if (conflict) {
+      return res
+        .status(400)
+        .json({ message: conflict.username === username
+          ? 'Username already in use'
+          : 'Email already in use'
+        });
+    }
+
+    // 3) Create & save user (pre-save hook hashes password)
+    const user = new User({ username, email, password });
     await user.save();
-    res.status(201).json({ message: 'Registration successful! You can now log in.' });
+
+    // 4) Auto-login after registration
+    req.login(user, err => {
+      if (err) {
+        console.error('Auto-login error:', err);
+        return res.status(500).json({ message: 'Registration succeeded, but auto-login failed.' });
+      }
+      // 5) Return the newly registered user
+      res.status(201).json({
+        user: {
+          id:       user._id,
+          username: user.username,
+          email:    user.email,
+          isAdmin:  user.isAdmin
+        }
+      });
+    });
   } catch (err) {
     console.error('Error in /api/auth/register:', err);
-    if (err.code === 11000) {
-      return res.status(400).json({ message: 'Username already exists.' });
-    }
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -57,10 +82,8 @@ router.post('/login', (req, res, next) => {
   }
 
   passport.authenticate('local', (err, user, info) => {
-    if (err) return next(err);
-    if (!user) {
-      return res.status(401).json({ message: info.message });
-    }
+    if (err)      return next(err);
+    if (!user)    return res.status(401).json({ message: info.message });
 
     req.login(user, loginErr => {
       if (loginErr) return next(loginErr);
@@ -68,6 +91,7 @@ router.post('/login', (req, res, next) => {
         user: {
           id:       user._id,
           username: user.username,
+          email:    user.email,
           isAdmin:  user.isAdmin
         }
       });
@@ -75,13 +99,29 @@ router.post('/login', (req, res, next) => {
   })(req, res, next);
 });
 
+// ─── Trigger Google OAuth ─────────────────────────────────────────────────────
+router.get(
+  '/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+// ─── Google OAuth Callback ────────────────────────────────────────────────────
+router.get(
+  '/google/callback',
+  passport.authenticate('google', {
+    failureRedirect: '/login',
+    session: true
+  }),
+  (req, res) => {
+    // on success, redirect back to React app
+    res.redirect('/');
+  }
+);
+
 // — Logout — GET /api/auth/logout
-router.get('/logout', (req, res) => {
+router.get('/logout', (req, res, next) => {
   req.logout(err => {
-    if (err) {
-      console.error('Logout error:', err);
-      return res.status(500).json({ message: 'Server error' });
-    }
+    if (err) return next(err);
     res.json({ message: 'Logged out' });
   });
 });

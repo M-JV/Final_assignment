@@ -1,34 +1,58 @@
 // models/User.js
 
-
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+const bcrypt   = require('bcrypt');
 
 const userSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true, trim: true },
-  password: { type: String, required: true },
-  isAdmin: { type: Boolean, default: false }
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  password: {
+    type: String,
+    // only required if there is no googleId
+    required: function() { return !this.googleId; }
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true  // allow multiple docs with no googleId
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  }
+}, {
+  timestamps: true
 });
 
-
-// Hash password before saving to the database
-userSchema.pre('save', async function (next) {
-
-  // avoids rehashing
+// ─── Hash password before saving ────────────────────────────────────────────────
+userSchema.pre('save', async function(next) {
+  // only hash if password is set/modified
   if (this.isModified('password')) {
     try {
-      const salt = await bcrypt.genSalt(10); // Generates a cryptographic “salt” with 10 rounds—higher = more secure but slower.
-      this.password = await bcrypt.hash(this.password, salt); // Produces the salted hash and overwrites this.password with it.
-    } catch (error) {
-      return next(error);
+      const salt       = await bcrypt.genSalt(10);
+      this.password    = await bcrypt.hash(this.password, salt);
+    } catch (err) {
+      return next(err);
     }
   }
   next();
 });
 
-
-// Method to compare passwords
-userSchema.methods.comparePassword = async function (candidatePassword) {
+// ─── Password comparison for local login ───────────────────────────────────────
+userSchema.methods.comparePassword = async function(candidatePassword) {
+  // if no local-password (OAuth user), always false
+  if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
 
