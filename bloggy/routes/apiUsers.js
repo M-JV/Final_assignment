@@ -5,7 +5,7 @@ const { isAuthenticated } = require('../middleware/auth');
 const router  = express.Router();
 
 // GET /api/users — list all users (no passwords!)
-router.get('/', isAuthenticated, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const users = await User.find().select('_id username');
     res.json(users);
