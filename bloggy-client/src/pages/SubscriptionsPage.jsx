@@ -1,4 +1,3 @@
-// src/pages/SubscriptionsPage.jsx
 import React, { useState, useEffect, useContext } from 'react';
 import {
   Container,
@@ -8,7 +7,7 @@ import {
   Spinner
 } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import api from '../api';                     // axios instance with baseURL '/api'
+import api from '../api';
 import { UserContext } from '../context/UserContext';
 
 export default function SubscriptionsPage() {
@@ -22,7 +21,7 @@ export default function SubscriptionsPage() {
       setLoading(false);
       return;
     }
-    api.get('/users/me/following')
+    api.get('/users/me/following')      // ← correct endpoint
       .then(res => setAuthors(res.data))
       .catch(err => {
         console.error(err);
@@ -67,8 +66,7 @@ export default function SubscriptionsPage() {
 
       {authors.length === 0 ? (
         <Alert variant="info">
-          You’re not subscribed to anyone yet.{' '}
-          <Link to="/posts">Browse posts &rarr;</Link>
+          You’re not subscribed to anyone yet. <Link to="/posts">Browse posts &rarr;</Link>
         </Alert>
       ) : (
         <ListGroup>

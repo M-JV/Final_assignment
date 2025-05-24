@@ -43,15 +43,16 @@ export default function AppNavbar() {
   // Socket.io real-time hookup
   useEffect(() => {
     if (!user) return;
-    const socket = io(import.meta.env.VITE_API_BASE, { withCredentials: true });
+    const socket = io(import.meta.env.VITE_API_BASE, {
+      withCredentials: true
+    });
+
     socket.on('new_post', notif => {
-    console.log('🔔 NEW_POST notification received:', notif);
-      setNotifications(prev => [{
-        ...notif,
-        seen: false
-      }, ...prev]);
+      console.log('🔔 NEW_POST notification received:', notif);
+      setNotifications(prev => [{ ...notif, seen: false }, ...prev]);
       setUnseenCount(c => c + 1);
     });
+
     return () => socket.disconnect();
   }, [user]);
 
@@ -63,13 +64,20 @@ export default function AppNavbar() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'GET', credentials: 'include' });
+    await fetch('/api/auth/logout', {
+      method:      'GET',
+      credentials: 'include'
+    });
     setUser(null);
     navigate('/login');
   };
 
   return (
-    <BSNavbar expand="lg" variant="light" className="shadow-sm sticky-top custom-navbar">
+    <BSNavbar
+      expand="lg"
+      variant="light"
+      className="shadow-sm sticky-top custom-navbar"
+    >
       <Container fluid>
         <BSNavbar.Brand as={Link} to="/" className="navbar-brand">
           Bloggy ✨
@@ -107,21 +115,28 @@ export default function AppNavbar() {
                 >
                   {notifications.length === 0 ? (
                     <NavDropdown.Item disabled>No notifications</NavDropdown.Item>
-                  ) : notifications.map((n, i) => (
-                    <NavDropdown.Item
-                      key={i}
-                      as={Link}
-                      to={`/posts/${n.postId}`}
-                    >
-                      <div><strong>{n.title}</strong> by {n.author}</div>
-                      <small className="text-muted">{dayjs(n.createdAt).fromNow()}</small>
-                    </NavDropdown.Item>
-                  ))}
+                  ) : (
+                    notifications.map((n, i) => (
+                      <NavDropdown.Item
+                        key={i}
+                        as={Link}
+                        to={`/posts/${n.postId}`}
+                      >
+                        <div>
+                          <strong>{n.title}</strong> by {n.author}
+                        </div>
+                        <small className="text-muted">
+                          {dayjs(n.createdAt).fromNow()}
+                        </small>
+                      </NavDropdown.Item>
+                    ))
+                  )}
                 </NavDropdown>
 
                 <Nav.Link as={Link} to="/posts/new" className="text-success">
                   ➕ New Post
                 </Nav.Link>
+
                 {user.isAdmin && (
                   <>
                     <Nav.Link as={Link} to="/admin/posts" className="text-danger">
@@ -132,6 +147,8 @@ export default function AppNavbar() {
                     </Nav.Link>
                   </>
                 )}
+
+                {/* User menu with profile image */}
                 <NavDropdown
                   title={
                     <span className="d-inline-flex align-items-center">
@@ -154,15 +171,22 @@ export default function AppNavbar() {
                     My Profile
                   </NavDropdown.Item>
                   <NavDropdown.Divider />
-                  <NavDropdown.Item onClick={handleLogout} className="text-danger">
+                  <NavDropdown.Item
+                    onClick={handleLogout}
+                    className="text-danger"
+                  >
                     ⏏ Logout
                   </NavDropdown.Item>
                 </NavDropdown>
               </>
             ) : (
               <>
-                <Nav.Link as={Link} to="/login"    className="text-info">🔐 Login</Nav.Link>
-                <Nav.Link as={Link} to="/register" className="text-info">📝 Register</Nav.Link>
+                <Nav.Link as={Link} to="/login"    className="text-info">
+                  🔐 Login
+                </Nav.Link>
+                <Nav.Link as={Link} to="/register" className="text-info">
+                  📝 Register
+                </Nav.Link>
               </>
             )}
           </Nav>

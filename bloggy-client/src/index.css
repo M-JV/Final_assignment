@@ -155,3 +155,12 @@ body {
   max-width: 400px;
   font-family: 'Lora', serif;
 }
+
+.online-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  background-color: #28a745;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+}

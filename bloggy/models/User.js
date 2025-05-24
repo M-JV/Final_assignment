@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema({
   email:     { type: String, required: true, unique: true, lowercase: true, trim: true },
   password:  { type: String, required: function() { return !this.googleId; } },
   googleId:  { type: String, unique: true, sparse: true },
+  profileImage: { type: String }, 
   isAdmin:   { type: Boolean, default: false },
   // ← who this user is subscribed to:
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]

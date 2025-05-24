@@ -37,19 +37,24 @@ passport.use(new GoogleStrategy({
     clientSecret: projectConfig.googleClientSecret,
     callbackURL:  `${projectConfig.baseUrl}/api/auth/google/callback`,
   },
-  async (accessToken, refreshToken, profile, done) => {
+   async (accessToken, refreshToken, profile, done) => {
     try {
-      let user = await User.findOne({ googleId: profile.id });
+      let user = await User.findOne({ googleId: profile.id })
       if (!user) {
         user = await User.create({
-          username: profile.displayName,
-          email:    profile.emails[0].value,
-          googleId: profile.id
-        });
+          username:     profile.displayName,
+          email:        profile.emails[0].value,
+          googleId:     profile.id,
+          profileImage: profile.photos?.[0]?.value    // ← save it
+        })
+      } else if (!user.profileImage) {
+        // in case you want to back-fill existing users
+        user.profileImage = profile.photos?.[0]?.value
+        await user.save()
       }
-      done(null, user);
+      done(null, user)
     } catch (err) {
-      done(err);
+      done(err)
     }
   }
 ));

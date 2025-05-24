@@ -13,6 +13,7 @@ const { Server } = require('socket.io');
 // ← Passport
 require('../config/passportConfig');
 
+const User       = require('../models/User');
 const apiAuth      = require('./apiAuth');
 const apiPostsFn   = require('./apiPosts');
 const apiUsers     = require('../routes/apiUsers');
@@ -26,6 +27,10 @@ const server = http.createServer(app);
 const io     = new Server(server, {
   cors: { origin: `http://localhost:${projectConfig.frontendPort}`, credentials: true }
 });
+
+
+// ─── keep track of who’s online ─────────────────────────────────────────────
+const onlineUsers = new Set();
 
 // ─── MongoDB ─────────────────────────────────────────────────────────────────
 mongoose
@@ -61,7 +66,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Socket.io session & auth
+// ─── SOCKET.IO AUTH & HOOKUP ───────────────────────────────────────────────────
 io.use((socket, next) => {
   sessionMiddleware(socket.request, {}, next);
 });
@@ -75,8 +80,17 @@ io.use((socket, next) => {
 });
 io.on('connection', socket => {
   console.log('🔌 Socket connected for user', socket.userId);
+  onlineUsers.add(socket.userId.toString());
   socket.join(socket.userId.toString());
+  socket.on('disconnect', () => {
+    onlineUsers.delete(socket.userId.toString());
+  });
 });
+
+
+
+
+
 
 // CSRF
 app.use(csrfProtection);
@@ -84,12 +98,25 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
 
+// ─── WHO’S ONLINE (full docs) ───────────────────────────────────────────────────
+// returns [{ _id, username }, …] for every user in onlineUsers
+app.get('/api/users/online', (req, res, next) => {
+  const ids = [...onlineUsers];
+  User.find({ _id: { $in: ids } })
+    .select('_id username')
+    .then(users => res.json(users))
+    .catch(next);
+});
+
+
+
 // JSON APIs
 app.use('/api/auth',          apiAuth);
 app.use('/api/posts',         apiPostsFn(io));
 app.use('/api/users',         apiUsers);
 app.use('/api/admin',         apiAdmin);
 app.use('/api/notifications', apiNotifs);
+
 
 // For any legacy forms
 app.use(addCsrfToken);

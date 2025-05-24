@@ -51,7 +51,7 @@ export default function HomePage() {
         {/* if logged in, show users panel */}
         {user && (
           <Col md={3} className="mb-4">
-            <h5 className="text-secondary">Active Users</h5>
+            <h5 className="text-secondary">Frequent Users</h5>
             {loadingUsers ? (
               <Spinner animation="border" size="sm" />
             ) : (

@@ -14,10 +14,11 @@ router.get('/me', (req, res) => {
   if (req.user) {
     return res.json({
       user: {
-        id:       req.user._id,
-        username: req.user.username,
-        email:    req.user.email,
-        isAdmin:  req.user.isAdmin
+        id:           req.user._id,
+        username:     req.user.username,
+        email:        req.user.email,
+        isAdmin:      req.user.isAdmin,
+        profileImage: req.user.profileImage || null
       }
     });
   }
@@ -64,7 +65,8 @@ router.post('/register', async (req, res) => {
           id:       user._id,
           username: user.username,
           email:    user.email,
-          isAdmin:  user.isAdmin
+          isAdmin:  user.isAdmin,
+          profileImage: user.profileImage || null
         }
       });
     });
@@ -92,7 +94,8 @@ router.post('/login', (req, res, next) => {
           id:       user._id,
           username: user.username,
           email:    user.email,
-          isAdmin:  user.isAdmin
+          isAdmin:  user.isAdmin,
+          profileImage: user.profileImage || null
         }
       });
     });
