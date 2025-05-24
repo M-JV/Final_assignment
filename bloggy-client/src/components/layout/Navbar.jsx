@@ -25,6 +25,11 @@ export default function AppNavbar() {
           <Nav className="me-auto align-items-center">
             <Nav.Link as={Link} to="/">Home</Nav.Link>
             <Nav.Link as={Link} to="/posts">All Posts</Nav.Link>
+                       {user && (
+                <Nav.Link as={Link} to="/subscriptions">
+                  Subscriptions
+                </Nav.Link>
+              )}
           </Nav>
 
           <Nav className="ms-auto align-items-center">

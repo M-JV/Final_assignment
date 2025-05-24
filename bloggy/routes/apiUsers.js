@@ -27,6 +27,18 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// NEW ➞ GET /api/users/me/following — list authors I’m subscribed to
+router.get('/me/following', isAuthenticated, async (req, res) => {
+  try {
+    const me = await User.findById(req.user._id)
+      .populate('following', 'username');
+    res.json(me.following);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error fetching subscriptions' });
+  }
+});
+
 // GET /api/users/:id/isSubscribed — am I following them?
 router.get('/:id/isSubscribed', isAuthenticated, async (req, res) => {
   try {
