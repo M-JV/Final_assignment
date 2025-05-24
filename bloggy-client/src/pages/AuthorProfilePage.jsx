@@ -17,81 +17,105 @@ export default function AuthorProfilePage() {
   const [subscribed, setSubscribed] = useState(false);
   const [toggling,   setToggling]   = useState(false);
 
-  const isOwner = user?.id === id;
+  // — make sure we're comparing the same ID that Passport gave us —
+  // depending on your UserContext you may have stored it as `user._id` or `user.id`
+  const myId    = user?._id ?? user?.id;
+  const isOwner = myId === id;
 
-  // 1) Load author info + their posts
+  // 1) load the author and their posts
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      api.get(`/users/${id}`),
-      api.get(`/posts?author=${id}`)
+      api.get(`/users/${id}`),           // { _id, username }
+      api.get(`/posts?author=${id}`)     // [ ...posts ]
     ])
-      .then(([userRes, postsRes]) => {
-        setAuthor(userRes.data);
-        setPosts(postsRes.data);
+      .then(([uRes, pRes]) => {
+        setAuthor(uRes.data);
+        setPosts(pRes.data);
       })
-      .catch(() => {
-        setError('Error loading profile');
+      .catch(err => {
+        console.error(err);
+        setError(err.response?.data?.message || 'Error loading profile');
       })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }, [id]);
 
-  // 2) If not viewing your own page, check subscription status
+  // 2) if it's not your own page, check subscription status
   useEffect(() => {
-    if (user && !isOwner) {
-      api.get(`/users/${id}/isSubscribed`, { withCredentials: true })
-        .then(res => {
-          setSubscribed(res.data.isSubscribed);
-        })
-        .catch(() => {
-          /* silently ignore */
-        });
+    if (myId && !isOwner) {
+      api.get(`/users/${id}/isSubscribed`)
+        .then(res => setSubscribed(!!res.data.isSubscribed))
+        .catch(err => console.error('Error fetching subscription status', err));
     }
-  }, [user, isOwner, id]);
+  }, [myId, isOwner, id]);
 
-  // 3) Toggle subscribe/unsubscribe
+  // 3) toggle subscribe/unsubscribe
   const toggleSubscription = async () => {
     if (!user) return navigate('/login');
     setToggling(true);
     try {
-      const url = subscribed
-        ? `/users/${id}/unfollow`
-        : `/users/${id}/follow`;
-      await api.post(url);
-      setSubscribed(!subscribed);
-    } catch {
-      /* silently ignore */
+      const action = subscribed ? 'unfollow' : 'follow';
+      await api.post(`/users/${id}/${action}`);
+      console.log(subscribed ? 'Successfully unsubscribed' : 'Successfully subscribed');
+      setSubscribed(s => !s);
+    } catch (err) {
+      // silence the “can't follow yourself” 400
+      if (
+        err.response?.status === 400 &&
+        err.response.data?.message?.includes("Can't follow")
+      ) {
+        console.warn('Tried to follow yourself – ignoring.');
+      } else {
+        console.error('Subscription error', err);
+        setError('Could not update subscription');
+      }
     } finally {
       setToggling(false);
     }
   };
 
-  // 4) Delete a post (only on your own page)
+  // 4) delete a post (only on your own page)
   const deletePost = async postId => {
     if (!window.confirm('Delete this post?')) return;
     try {
       await api.delete(`/posts/${postId}`);
       setPosts(ps => ps.filter(p => p._id !== postId));
-    } catch {
+    } catch (err) {
+      console.error(err);
       alert('Could not delete post');
     }
   };
 
-  if (loading) return <Container className="my-5 text-center"><Spinner /></Container>;
-  if (error)   return <Container className="my-5"><Alert variant="danger">{error}</Alert></Container>;
-  if (!author) return <Container className="my-5"><Alert>No such user.</Alert></Container>;
+  if (loading) {
+    return (
+      <Container className="my-5 text-center">
+        <Spinner animation="border" />
+      </Container>
+    );
+  }
+  if (error) {
+    return (
+      <Container className="my-5">
+        <Alert variant="danger">{error}</Alert>
+      </Container>
+    );
+  }
+  if (!author) {
+    return (
+      <Container className="my-5">
+        <Alert>No such user.</Alert>
+      </Container>
+    );
+  }
 
   return (
     <Container className="my-5" style={{ maxWidth: 800 }}>
       <h2>
-        {author.username}
-        {' '}
+        {author.username}{' '}
         <small className="text-muted">({posts.length} posts)</small>
       </h2>
 
-      {/* subscribe button */}
+      {/* Subscribe / Unsubscribe */}
       {!isOwner && user && (
         <Button
           size="sm"
@@ -104,17 +128,16 @@ export default function AuthorProfilePage() {
             ? '…'
             : subscribed
               ? 'Unsubscribe'
-              : 'Subscribe'
-          }
+              : 'Subscribe'}
         </Button>
       )}
 
-      {/* no posts */}
+      {/* No posts */}
       {posts.length === 0 && (
         <Alert variant="info">This author has no posts yet.</Alert>
       )}
 
-      {/* posts list */}
+      {/* Post list */}
       {posts.map(post => (
         <Card key={post._id} className="mb-3 shadow-sm">
           <Card.Body>
@@ -124,9 +147,7 @@ export default function AuthorProfilePage() {
             <small className="text-muted">
               {new Date(post.createdAt).toLocaleDateString()}
             </small>
-            <p className="mt-2">
-              {post.content.slice(0, 100)}…
-            </p>
+            <p className="mt-2">{post.content.slice(0, 100)}…</p>
             {isOwner && (
               <div>
                 <Link

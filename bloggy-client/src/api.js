@@ -1,18 +1,18 @@
-// src/api.js
-import axios from 'axios';
+// bloggy-client/src/api.js
+import axios from 'axios'
 
 const api = axios.create({
   baseURL: '/api',
-  withCredentials: true,      // send cookies on cross-site requests
-});
+  withCredentials: true
+})
 
-// before each API request, fetch a fresh CSRF token
 api.interceptors.request.use(async config => {
+  // make sure this is `/api/csrf-token` (not `/csrf-token`)
   const { data } = await axios.get('/api/csrf-token', {
     withCredentials: true
-  });
-  config.headers['X-CSRF-Token'] = data.csrfToken;
-  return config;
-});
+  })
+  config.headers['X-CSRF-Token'] = data.csrfToken
+  return config
+})
 
-export default api;
+export default api

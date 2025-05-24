@@ -5,27 +5,29 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 
 export default function NewPostPage() {
-  const [title, setTitle]     = useState('');
-  const [content, setContent] = useState('');
-  const [tags, setTags]       = useState('');
-  const [error, setError]     = useState('');
-  const navigate = useNavigate();
+  const [title, setTitle]         = useState('');
+  const [content, setContent]     = useState('');
+  const [tagsInput, setTagsInput] = useState('');
+  const [error, setError]         = useState('');
+  const navigate                   = useNavigate();
 
   const handleSubmit = async e => {
     e.preventDefault();
     setError('');
+
+    // Turn the comma-separated string into a real array
+    const tags = tagsInput
+      .split(',')
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
+
     try {
-      await api.post(
-        'posts',       // ← no leading slash, so url becomes /api/posts
-        {
-          title,
-          content,
-          tags: tags
-            .split(',')
-            .map(t => t.trim())
-            .filter(t => t),
-        }
-      );
+      await api.post('posts', {
+        title,
+        content,
+        // only send tags if there’s at least one
+        ...(tags.length > 0 && { tags })
+      });
       navigate('/posts');
     } catch (err) {
       setError(err.response?.data?.message || 'Error creating post');
@@ -63,9 +65,13 @@ export default function NewPostPage() {
           <Form.Label>Tags (comma-separated)</Form.Label>
           <Form.Control
             type="text"
-            value={tags}
-            onChange={e => setTags(e.target.value)}
+            value={tagsInput}
+            onChange={e => setTagsInput(e.target.value)}
+            placeholder="e.g. react, javascript, webdev"
           />
+          <Form.Text className="text-muted">
+            Optional—enter each tag separated by commas.
+          </Form.Text>
         </Form.Group>
 
         <Button variant="success" type="submit" className="w-100">

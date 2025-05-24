@@ -39,6 +39,7 @@ const postValidation = Joi.object({
     'string.empty': 'Content is required',
   }),
   _csrf: Joi.string(), // allow _csrf token, otherwise joi complains
+  tags:    Joi.array().items(Joi.string().min(1).max(30)).optional()
 });
 
 module.exports = { registerValidation, loginValidation, postValidation };

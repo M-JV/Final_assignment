@@ -1,28 +1,31 @@
 // controllers/app.js
 require('dotenv').config();
-const path        = require('path');
-const fs          = require('fs');
-const express     = require('express');
-const mongoose    = require('mongoose');
-const session     = require('express-session');
-const flash       = require('connect-flash');
-const passport    = require('passport');
+const path       = require('path');
+const fs         = require('fs');
+const express    = require('express');
+const http       = require('http');
+const mongoose   = require('mongoose');
+const session    = require('express-session');
+const flash      = require('connect-flash');
+const passport   = require('passport');
+const { Server } = require('socket.io');
 
-// <-- Load & configure Passport strategies
+// ← Passport
 require('../config/passportConfig');
 
-const apiAuth       = require('./apiAuth');
-const apiPosts    = require('../routes/posts');
-const apiAdmin      = require('../routes/apiAdmin'); 
-const apiUsers  = require('../routes/apiUsers');   // ← your new JSON admin API
-// const Post          = require('../models/Post');
-const {
-  csrfProtection,
-  addCsrfToken
-} = require('../middleware/csrf');
-
+const apiAuth      = require('./apiAuth');
+const apiPostsFn   = require('./apiPosts');
+const apiUsers     = require('../routes/apiUsers');
+const apiAdmin     = require('../routes/apiAdmin');
+const apiNotifs    = require('../routes/apiNotifications');
+const { csrfProtection, addCsrfToken } = require('../middleware/csrf');
 const projectConfig = require(path.join(__dirname, '../../project.config.js'));
-const app           = express();
+
+const app    = express();
+const server = http.createServer(app);
+const io     = new Server(server, {
+  cors: { origin: `http://localhost:${projectConfig.frontendPort}`, credentials: true }
+});
 
 // ─── MongoDB ─────────────────────────────────────────────────────────────────
 mongoose
@@ -37,79 +40,78 @@ mongoose
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// ─── Body Parsing ──────────────────────────────────────────────────────────────
+// Body
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Session, Flash & Passport ─────────────────────────────────────────────────
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'replace_me!',
-    resave: false,
-    saveUninitialized: false
-  })
-);
+// Session + Passport
+const sessionMiddleware = session({
+  secret:            process.env.SESSION_SECRET || 'replace_me!',
+  resave:            false,
+  saveUninitialized: false
+});
+app.use(sessionMiddleware);
 app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ─── Make flash & user available on req (for JSON APIs) ────────────────────────
+// Expose flash & user to req
 app.use((req, res, next) => {
   req.flash = req.flash.bind(req);
-  req.user  = req.user;
   next();
 });
 
-// ─── CSRF PROTECTION ────────────────────────────────────────────────────────────
-app.use(csrfProtection);
+// Socket.io session & auth
+io.use((socket, next) => {
+  sessionMiddleware(socket.request, {}, next);
+});
+io.use((socket, next) => {
+  const req = socket.request;
+  if (req.session?.passport?.user) {
+    socket.userId = req.session.passport.user;
+    return next();
+  }
+  next(new Error('Unauthorized'));
+});
+io.on('connection', socket => {
+  console.log('🔌 Socket connected for user', socket.userId);
+  socket.join(socket.userId.toString());
+});
 
-// 🔑 expose a JSON CSRF token endpoint for your React client
+// CSRF
+app.use(csrfProtection);
 app.get('/api/csrf-token', (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
 
+// JSON APIs
+app.use('/api/auth',          apiAuth);
+app.use('/api/posts',         apiPostsFn(io));
+app.use('/api/users',         apiUsers);
+app.use('/api/admin',         apiAdmin);
+app.use('/api/notifications', apiNotifs);
 
-// ─── JSON API routes (no CSRF needed beyond this) ───────────────────────────────
-app.use('/api/auth', apiAuth);
-app.use('/api/posts', apiPosts);
-app.use('/api/admin', apiAdmin);   
-app.use('/api/users', apiUsers);
-
-                     // ← mount admin JSON API
-
-// ─── Inject CSRF token cookie into any (theoretical) HTML forms ────────────────
+// For any legacy forms
 app.use(addCsrfToken);
 
-// ─── Serve React ◀════════════════════════════════════════════════════════════
-// The client folder is called "bloggy-client" next to "bloggy":
-// ─── Serve React build in production only ──────────────────────────────────────
-const isProd    = process.env.NODE_ENV === 'production';
-const clientDir = path.join(__dirname, '../../bloggy-client');
-if (isProd) {
+// (Prod-only) serve React build
+if (process.env.NODE_ENV === 'production') {
+  const clientDir = path.join(__dirname, '../../bloggy-client');
   let spaPath = null;
-  if (fs.existsSync(path.join(clientDir, 'dist', 'index.html'))) {
+  if (fs.existsSync(path.join(clientDir, 'dist/index.html'))) {
     spaPath = path.join(clientDir, 'dist');
-  } else if (fs.existsSync(path.join(clientDir, 'build', 'index.html'))) {
+  } else if (fs.existsSync(path.join(clientDir, 'build/index.html'))) {
     spaPath = path.join(clientDir, 'build');
-  } else {
-    console.warn(
-      '\x1b[33m%s\x1b[0m',
-      '⚠️  No React production build found. Run `cd bloggy-client && npm run build`.'
-    );
   }
-
   if (spaPath) {
     app.use(express.static(spaPath));
-    // any non-API GET → index.html
     app.get(/^\/(?!api\/).*/, (req, res) =>
       res.sendFile(path.join(spaPath, 'index.html'))
     );
   }
-} else {
-  console.log('🔧 Skipping React static‐serve (development mode)');
 }
 
-// ─── API error handler & server start ───────────────────────────────────────
+// Error handler
 app.use((err, req, res, next) => {
   console.error(err);
   if (req.path.startsWith('/api/')) {
@@ -118,8 +120,9 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
+
 // ─── Start Server ──────────────────────────────────────────────────────────────
-const PORT = projectConfig.backendPort;
-app.listen(PORT, () => {
-  console.log(`🚀 Server listening on http://localhost:${PORT}`);
+const PORT = projectConfig.backendPort;    // e.g. 5173
+server.listen(PORT, () => {
+  console.log(`🚀 HTTP + Socket.io listening on http://localhost:${PORT}`);
 });
