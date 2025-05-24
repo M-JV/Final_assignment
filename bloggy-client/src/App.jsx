@@ -14,6 +14,7 @@ import LoginPage        from './pages/LoginPage.jsx';
 import RegisterPage     from './pages/RegisterPage.jsx';
 import AdminPostsPage   from './pages/AdminPostsPage.jsx';
 import AdminUsersPage   from './pages/AdminUsersPage.jsx';
+import AuthorProfilePage from './pages/AuthorProfilePage.jsx';
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="admin/posts" element={<AdminPostsPage />} />
             <Route path="admin/users" element={<AdminUsersPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="author/:id" element={<AuthorProfilePage />} />
           </Route>
         </Routes>
       </BrowserRouter>

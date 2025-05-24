@@ -1,152 +1,106 @@
-import React, { useState, useEffect, useContext } from 'react'
-import {
-  Container,
-  Card,
-  Button,
-  Badge,
-  Spinner,
-  Alert
-} from 'react-bootstrap'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import api from '../api'
-import { UserContext } from '../context/UserContext'
+import React, { useState, useEffect, useContext } from 'react';
+import { Container, Card, Button, Badge, Spinner, Alert } from 'react-bootstrap';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import api from '../api';
+import { UserContext } from '../context/UserContext';
 
 export default function PostDetailPage() {
-  const { id }   = useParams()
-  const { user } = useContext(UserContext)
-  const navigate = useNavigate()
+  const { id }   = useParams();
+  const { user } = useContext(UserContext);
+  const nav      = useNavigate();
 
-  const [post, setPost]               = useState(null)
-  const [loadingPost, setLoadingPost] = useState(true)
-  const [error, setError]             = useState('')
-  const [isSubscribed, setIsSubscribed] = useState(false)
-  const [toggling, setToggling]       = useState(false)
+  const [post,      setPost]      = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
+  const [subscribed, setSubscribed] = useState(false);
+  const [toggling,  setToggling]  = useState(false);
 
-  // 1️⃣ Load the post
+  // load post
   useEffect(() => {
     api.get(`/posts/${id}`)
-      .then(res => setPost(res.data))
-      .catch(err => setError(err.response?.data?.message || 'Error loading post'))
-      .finally(() => setLoadingPost(false))
-  }, [id])
+      .then(r => setPost(r.data))
+      .catch(e => setError(e.response?.data?.message || 'Error'))
+      .finally(() => setLoading(false));
+  }, [id]);
 
-  // 2️⃣ Check subscribe status once post + user are known
+  // check subscribe (once we have both post & user)
   useEffect(() => {
-    if (user && post?.createdBy?._id) {
+    if (user && post?.createdBy?._id && user.id !== post.createdBy._id) {
       api.get(`/users/${post.createdBy._id}/isSubscribed`, { withCredentials: true })
-        .then(res => setIsSubscribed(res.data.isSubscribed))
-        .catch(console.error)
+         .then(r => setSubscribed(r.data.isSubscribed))
+         .catch(console.error);
     }
-  }, [user, post])
+  }, [user, post]);
 
-  const handleToggleSubscribe = async () => {
-    if (!user) return
-    setToggling(true)
+  const toggle = async () => {
+    if (!user) return nav('/login');
+    setToggling(true);
     try {
-      if (isSubscribed) {
-        await api.post(`/users/${post.createdBy._id}/unfollow`)
-      } else {
-        await api.post(`/users/${post.createdBy._id}/follow`)
-      }
-      setIsSubscribed(!isSubscribed)
-    } catch (err) {
-      console.error(err)
+      const url = subscribed
+        ? `/users/${post.createdBy._id}/unfollow`
+        : `/users/${post.createdBy._id}/follow`;
+      await api.post(url);
+      setSubscribed(!subscribed);
+    } catch (e) {
+      console.error(e);
     } finally {
-      setToggling(false)
+      setToggling(false);
     }
-  }
+  };
 
-  const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this post?')) return
+  const remove = async () => {
+    if (!window.confirm('Delete?')) return;
     try {
-      await api.delete(`/posts/${id}`)
-      navigate('/posts')
-    } catch (err) {
-      setError(err.response?.data?.message || 'Error deleting post')
+      await api.delete(`/posts/${id}`);
+      nav('/posts');
+    } catch (e) {
+      setError(e.response?.data?.message || 'Error deleting');
     }
-  }
+  };
 
-  if (loadingPost) {
-    return (
-      <Container className="my-5 text-center">
-        <Spinner animation="border" />
-      </Container>
-    )
-  }
-  if (error) {
-    return (
-      <Container className="my-5">
-        <Alert variant="danger">{error}</Alert>
-      </Container>
-    )
-  }
-  if (!post) {
-    return (
-      <Container className="my-5">
-        <Alert>No post found.</Alert>
-      </Container>
-    )
-  }
+  if (loading) return <Container className="text-center my-5"><Spinner /></Container>;
+  if (error)   return <Container className="my-5"><Alert variant="danger">{error}</Alert></Container>;
+  if (!post)   return <Container className="my-5"><Alert>No post.</Alert></Container>;
 
-  const { title, content, tags, createdBy, createdAt } = post
-  const isAuthor = user?.id === createdBy._id
-  const when     = new Date(createdAt).toLocaleDateString()
+  const { title, content, tags, createdBy, createdAt } = post;
+  const isOwner = user?.id === createdBy._id;
+  const dateStr = new Date(createdAt).toLocaleDateString();
 
   return (
     <Container className="my-5">
-      <Card className="mx-auto shadow" style={{ maxWidth: 800 }}>
+      <Card className="mx-auto" style={{ maxWidth: 800 }}>
         <Card.Body>
-          <h1 className="text-primary mb-3">{title}</h1>
-
-          <div className="mb-3 text-muted d-flex align-items-center">
-            By{' '}
-            <Link to={`/author/${createdBy._id}`} className="fw-bold mx-2">
-              {createdBy.username}
-            </Link>
-            on {when}
-
-            {!isAuthor && user && (
+          <h1 className="mb-3 text-primary">{title}</h1>
+          <div className="mb-3">
+            By <Link to={`/author/${createdBy._id}`}>{createdBy.username}</Link> on {dateStr}
+            {!isOwner && user && (
               <Button
                 size="sm"
-                variant={isSubscribed ? 'outline-danger' : 'outline-success'}
+                variant={subscribed ? 'outline-danger' : 'outline-success'}
                 className="ms-3"
-                onClick={handleToggleSubscribe}
                 disabled={toggling}
+                onClick={toggle}
               >
-                {toggling
-                  ? '...'
-                  : isSubscribed
-                    ? 'Unsubscribe'
-                    : 'Subscribe'
-                }
+                {toggling ? '…' : subscribed ? 'Unsubscribe' : 'Subscribe'}
               </Button>
             )}
           </div>
-
-          <Card.Text className="mb-4">{content}</Card.Text>
-
-          {tags?.map(tag => (
-            <Link
-              key={tag}
-              to={`/posts?q=${encodeURIComponent(tag)}`}
-              className="me-2"
-            >
-              <Badge bg="info">{tag}</Badge>
-            </Link>
-          ))}
-
-          {isAuthor && (
-            <div className="mt-4">
-              <Link to={`/posts/${id}/edit`} className="btn btn-primary me-2">
-                Edit
+          <Card.Text>{content}</Card.Text>
+          <div className="mb-4">
+            {tags?.map(t => (
+              <Link key={t} to={`/posts?q=${encodeURIComponent(t)}`} className="me-2">
+                <Badge bg="info">{t}</Badge>
               </Link>
-              <Button variant="danger" onClick={handleDelete}>
-                Delete
-              </Button>
+            ))}
+          </div>
+          {isOwner && (
+            <div>
+              <Link to={`/posts/${id}/edit`} className="btn btn-primary me-2">Edit</Link>
+              <Button variant="danger" onClick={remove}>Delete</Button>
             </div>
           )}
         </Card.Body>
       </Card>
     </Container>
-  )
+  );
 }

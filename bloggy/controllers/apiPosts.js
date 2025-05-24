@@ -1,9 +1,9 @@
 // controllers/apiPosts.js
-const express          = require('express');
-const Post             = require('../models/Post');
+const express            = require('express');
+const Post               = require('../models/Post');
+const User               = require('../models/User');
 const { postValidation } = require('./validation');
-
-const router = express.Router();
+const router             = express.Router();
 
 // simple auth guard
 function ensureLoggedIn(req, res, next) {
@@ -11,21 +11,38 @@ function ensureLoggedIn(req, res, next) {
   res.status(401).json({ message: 'Unauthorized' });
 }
 
-// — List & Search — GET /api/posts
+// — List, Search & By‐Author — GET /api/posts
+// GET /api/posts?search=…&author=…
 router.get('/posts', async (req, res) => {
   try {
-    const { search } = req.query;
-    let filter = {};
+    const { search, author } = req.query;
+    const filter = {};
+
+    // filter by author ID
+    if (author) {
+      filter.createdBy = author;
+    }
+
+    // full-text search on title/content/tags + author name
     if (search) {
       const re = new RegExp(search, 'i');
-      filter = { $or: [{ title: re }, { content: re }, { tags: re }] };
+      // find matching authors
+      const matching = await User.find({ username: re }).select('_id');
+      const authorIds = matching.map(u => u._id);
+      filter.$or = [
+        { title: re },
+        { content: re },
+        { tags: re },
+        { createdBy: { $in: authorIds } }
+      ];
     }
+
     const posts = await Post.find(filter)
       .sort('-createdAt')
       .populate('createdBy', 'username');
     res.json(posts);
   } catch (err) {
-    console.error('Error in GET /api/posts:', err);
+    console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
