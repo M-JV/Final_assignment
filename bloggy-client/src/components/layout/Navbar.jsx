@@ -25,7 +25,7 @@ export default function AppNavbar() {
   const [notifications, setNotifications] = useState([]);
   const [unseenCount,    setUnseenCount]  = useState(0);
 
-  // Fetch missed notifications on login
+  // 1) missed notifications
   useEffect(() => {
     if (!user) {
       setNotifications([]);
@@ -40,67 +40,59 @@ export default function AppNavbar() {
       .catch(console.error);
   }, [user]);
 
-  // Socket.io real-time hookup
+  // 2) real‐time
   useEffect(() => {
     if (!user) return;
-    const socket = io(import.meta.env.VITE_API_BASE, {
-      withCredentials: true
-    });
-
+    const socket = io(import.meta.env.VITE_API_BASE, { withCredentials: true });
     socket.on('new_post', notif => {
-      console.log('🔔 NEW_POST notification received:', notif);
       setNotifications(prev => [{ ...notif, seen: false }, ...prev]);
       setUnseenCount(c => c + 1);
     });
-
     return () => socket.disconnect();
   }, [user]);
 
-  // Mark all as seen when dropdown opens
+  // 3) mark‐seen
   const handleMarkSeen = () => {
     api.patch('/notifications/mark-seen')
       .then(() => setUnseenCount(0))
       .catch(console.error);
   };
 
+  // 4) logout
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', {
-      method:      'GET',
-      credentials: 'include'
-    });
+    await fetch('/api/auth/logout', { method: 'GET', credentials: 'include' });
     setUser(null);
     navigate('/login');
   };
 
   return (
-    <BSNavbar
-      expand="lg"
-      variant="light"
-      className="shadow-sm sticky-top custom-navbar"
-    >
+    <BSNavbar expand="lg" variant="light" className="shadow-sm sticky-top custom-navbar">
       <Container fluid>
         <BSNavbar.Brand as={Link} to="/" className="navbar-brand">
           Bloggy ✨
         </BSNavbar.Brand>
         <BSNavbar.Toggle />
         <BSNavbar.Collapse>
+
+          {/* left nav */}
           <Nav className="me-auto align-items-center">
             <Nav.Link as={Link} to="/">Home</Nav.Link>
             <Nav.Link as={Link} to="/posts">All Posts</Nav.Link>
             {user && <Nav.Link as={Link} to="/subscriptions">Subscriptions</Nav.Link>}
           </Nav>
+
+          {/* right nav */}
           <Nav className="ms-auto align-items-center">
             {user ? (
               <>
-                {/* 🔔 notifications */}
+                {/* bell */}
                 <NavDropdown
                   title={
                     <span className="position-relative">
                       <Bell size={20} style={{ cursor: 'pointer' }} />
                       {unseenCount > 0 && (
                         <Badge
-                          bg="danger"
-                          pill
+                          bg="danger" pill
                           className="position-absolute top-0 start-100 translate-middle"
                           style={{ fontSize: '0.6rem' }}
                         >
@@ -113,51 +105,47 @@ export default function AppNavbar() {
                   align="end"
                   onToggle={open => open && handleMarkSeen()}
                 >
-                  {notifications.length === 0 ? (
-                    <NavDropdown.Item disabled>No notifications</NavDropdown.Item>
-                  ) : (
-                    notifications.map((n, i) => (
-                      <NavDropdown.Item
-                        key={i}
-                        as={Link}
-                        to={`/posts/${n.postId}`}
-                      >
-                        <div>
-                          <strong>{n.title}</strong> by {n.author}
-                        </div>
-                        <small className="text-muted">
-                          {dayjs(n.createdAt).fromNow()}
-                        </small>
-                      </NavDropdown.Item>
-                    ))
-                  )}
+                  {notifications.length === 0
+                    ? <NavDropdown.Item disabled>No notifications</NavDropdown.Item>
+                    : notifications.map((n,i) => (
+                        <NavDropdown.Item
+                          key={i}
+                          as={Link}
+                          to={`/posts/${n.postId}`}
+                          className="d-flex flex-column align-items-start"
+                          style={{ whiteSpace: 'normal' }}
+                        >
+                          <div style={{ wordBreak: 'break-word' }}>
+                            <strong>{n.title}</strong>
+                          </div>
+                          <div style={{ wordBreak: 'break-word', fontStyle: 'italic' }}>
+                            by {n.author}
+                          </div>
+                          <small className="text-muted align-self-end">
+                            {dayjs(n.createdAt).fromNow()}
+                          </small>
+                        </NavDropdown.Item>
+                      ))
+                  }
                 </NavDropdown>
 
+                {/* other links */}
                 <Nav.Link as={Link} to="/posts/new" className="text-success">
                   ➕ New Post
                 </Nav.Link>
-
                 {user.isAdmin && (
                   <>
-                    <Nav.Link as={Link} to="/admin/posts" className="text-danger">
-                      🛠 Admin Posts
-                    </Nav.Link>
-                    <Nav.Link as={Link} to="/admin/users" className="text-danger">
-                      🔧 Admin Users
-                    </Nav.Link>
+                    <Nav.Link as={Link} to="/admin/posts" className="text-danger">🛠 Admin Posts</Nav.Link>
+                    <Nav.Link as={Link} to="/admin/users" className="text-danger">🔧 Admin Users</Nav.Link>
                   </>
                 )}
-
-                {/* User menu with profile image */}
                 <NavDropdown
                   title={
                     <span className="d-inline-flex align-items-center">
                       {user.profileImage && (
                         <Image
                           src={user.profileImage}
-                          roundedCircle
-                          width={24}
-                          height={24}
+                          roundedCircle width={24} height={24}
                           className="me-1"
                         />
                       )}
@@ -167,29 +155,19 @@ export default function AppNavbar() {
                   id="nav-user"
                   align="end"
                 >
-                  <NavDropdown.Item as={Link} to={`/author/${user.id}`}>
-                    My Profile
-                  </NavDropdown.Item>
-                  <NavDropdown.Divider />
-                  <NavDropdown.Item
-                    onClick={handleLogout}
-                    className="text-danger"
-                  >
-                    ⏏ Logout
-                  </NavDropdown.Item>
+                  <NavDropdown.Item as={Link} to={`/author/${user.id}`}>My Profile</NavDropdown.Item>
+                  <NavDropdown.Divider/>
+                  <NavDropdown.Item onClick={handleLogout} className="text-danger">⏏ Logout</NavDropdown.Item>
                 </NavDropdown>
               </>
             ) : (
               <>
-                <Nav.Link as={Link} to="/login"    className="text-info">
-                  🔐 Login
-                </Nav.Link>
-                <Nav.Link as={Link} to="/register" className="text-info">
-                  📝 Register
-                </Nav.Link>
+                <Nav.Link as={Link} to="/login"    className="text-info">🔐 Login</Nav.Link>
+                <Nav.Link as={Link} to="/register" className="text-info">📝 Register</Nav.Link>
               </>
             )}
           </Nav>
+
         </BSNavbar.Collapse>
       </Container>
     </BSNavbar>
